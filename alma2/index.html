@@ -45,8 +45,23 @@
     <section id="perfumes" class="products-section">
         <div class="container">
             <h2 class="section-title">Our Premium Perfumes</h2>
-            <div class="products-grid">
-                <div class="product-card" data-category="perfume">
+            
+            <!-- Search and Filter Bar -->
+            <div class="search-filter-bar">
+                <div class="search-container">
+                    <input type="text" id="perfumeSearch" placeholder="Search perfumes..." class="search-input">
+                    <i class="fas fa-search search-icon"></i>
+                </div>
+                <div class="filter-buttons">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="floral">Floral</button>
+                    <button class="filter-btn" data-filter="woody">Woody</button>
+                    <button class="filter-btn" data-filter="fresh">Fresh</button>
+                </div>
+            </div>
+            
+            <div class="products-grid" id="perfumesGrid">
+                <div class="product-card" data-category="perfume" data-type="floral" data-name="Midnight Rose">
                     <div class="product-image">
                         <img src="images/image1.jpg" alt="Midnight Rose Perfume" class="perfume-img">
                     </div>
@@ -55,7 +70,7 @@
                     <span class="price">₹7,499</span>
                     <button class="add-to-cart">Add to Cart</button>
                 </div>
-                <div class="product-card" data-category="perfume">
+                <div class="product-card" data-category="perfume" data-type="fresh" data-name="Ocean Breeze">
                     <div class="product-image">
                         <img src="images/image2.jpg" alt="Ocean Breeze Perfume" class="perfume-img">
                     </div>
@@ -64,7 +79,7 @@
                     <span class="price">₹6,299</span>
                     <button class="add-to-cart">Add to Cart</button>
                 </div>
-                <div class="product-card" data-category="perfume">
+                <div class="product-card" data-category="perfume" data-type="woody" data-name="Amber Nights">
                     <div class="product-image">
                         <img src="images/image3.jpg" alt="Amber Nights Perfume" class="perfume-img">
                     </div>
@@ -171,6 +186,7 @@
                     <p>Jaswanth R - 02JST22UEI018</p>
                     <p>Harshith B R - 02JST22UEI014</p>
                     <p>Manush H G - 02JST22UEI030</p>
+                    <p>Palguna Shetty - 02JST22UCS072</p>
                 </div>
             </div>
         </div>
@@ -196,6 +212,58 @@
         <i class="fas fa-shopping-cart"></i>
         <span class="cart-count" id="cartCount">0</span>
     </button>
+
+    <!-- Product Quick View Modal -->
+    <div class="modal-overlay" id="productModal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeProductModal()">×</button>
+            <div class="modal-body">
+                <div class="product-quick-view">
+                    <div class="product-image-gallery">
+                        <img src="" alt="" id="modalProductImage" class="modal-product-image">
+                        <div class="product-thumbnails">
+                            <img src="" alt="" class="thumbnail active">
+                            <img src="" alt="" class="thumbnail">
+                            <img src="" alt="" class="thumbnail">
+                        </div>
+                    </div>
+                    <div class="product-details">
+                        <h2 id="modalProductName"></h2>
+                        <p id="modalProductDescription"></p>
+                        <div class="product-meta">
+                            <span class="price" id="modalProductPrice"></span>
+                            <div class="rating">
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <i class="fas fa-star"></i>
+                                <span>(4.8/5)</span>
+                            </div>
+                        </div>
+                        <div class="product-options">
+                            <div class="quantity-selector">
+                                <label>Quantity:</label>
+                                <div class="quantity-controls">
+                                    <button onclick="decreaseQuantity()">-</button>
+                                    <input type="number" value="1" min="1" id="quantityInput">
+                                    <button onclick="increaseQuantity()">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-actions">
+                            <button class="add-to-cart-modal" onclick="addToCartFromModal()">
+                                <i class="fas fa-shopping-cart"></i> Add to Cart
+                            </button>
+                            <button class="buy-now" onclick="buyNow()">
+                                <i class="fas fa-bolt"></i> Buy Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
