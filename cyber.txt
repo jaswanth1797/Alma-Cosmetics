@@ -1,0 +1,17 @@
+Unit 1:Introduction to Cyber Security.
+
+1.What is Computer Security?
+    -What is an Asset?
+    -Vulnerability-Threat-control machanism
+2.Threats
+    -What are Threats?
+    -Security Principles:
+        Availability
+        Integrity
+        Confidentiality
+    -What is Harm?
+    -4 Acts to Cause Security Harm.
+    -Types of Threats
+        -Random_Attack
+        -Direct-access Attack 
+3.Types of Attackers
