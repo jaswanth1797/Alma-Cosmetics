@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Alma</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="logo">
+                <img src="images/logo.jpg" alt="Alma Logo" class="logo-img">
+                <span class="logo-text">ALMA</span>
+            </div>
+            <ul class="nav-menu" id="navMenu">
+                <li class="nav-item"><a href="index.html#home" class="nav-link">Home</a></li>
+                <li class="nav-item"><a href="index.html#perfumes" class="nav-link">Perfumes</a></li>
+                <li class="nav-item"><a href="index.html#cosmetics" class="nav-link">Cosmetics</a></li>
+                <li class="nav-item"><a href="admin.html" class="nav-link">Admin</a></li>
+            </ul>
+            <div class="hamburger"><span class="bar"></span><span class="bar"></span><span class="bar"></span></div>
+        </div>
+    </nav>
+
+    <section class="products-section" style="padding-top: 120px;">
+        <div class="container">
+            <h2 class="section-title">Admin Dashboard</h2>
+
+            <h3 style="color:#fff; margin: 1rem 0;">Products</h3>
+            <div class="products-grid" id="adminProducts"></div>
+
+            <h3 style="color:#fff; margin: 2rem 0 1rem;">Add / Edit Product</h3>
+            <form id="productForm" class="contact-form" style="max-width: 600px;">
+                <input type="hidden" id="prodId">
+                <input type="text" id="prodName" placeholder="Name" required>
+                <input type="text" id="prodBrand" placeholder="Brand (Floral/Fresh/Woody/Cosmetic)" required>
+                <input type="number" id="prodPrice" placeholder="Price (INR)" required>
+                <input type="number" id="prodStock" placeholder="Stock" required>
+                <input type="text" id="prodImage" placeholder="Image URL" required>
+                <textarea id="prodDesc" placeholder="Description" rows="3" required></textarea>
+                <div style="display:flex; gap:10px;">
+                    <button type="submit" class="submit-btn" id="saveProductBtn">Save</button>
+                    <button type="button" class="submit-btn" id="resetProductBtn">Reset</button>
+                </div>
+            </form>
+
+            <h3 style="color:#fff; margin: 2rem 0 1rem;">Orders</h3>
+            <div class="products-grid" id="adminOrders"></div>
+        </div>
+    </section>
+
+    <script src="script.js"></script>
+</body>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    if (typeof initAdminPage === 'function') initAdminPage();
+});
+</script>
+</html>
+

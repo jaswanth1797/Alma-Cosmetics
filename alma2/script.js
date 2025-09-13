@@ -6,8 +6,12 @@ document.addEventListener('DOMContentLoaded', function() {
     setupScrollAnimations();
     setupShoppingCart();
     setupContactForm();
+    setupAuthState();
     
     showWelcomeMessage();
+
+    // Load products from backend API and render
+    initializeBackendProductLoading();
 });
 
 function setupMobileNavigation() {
@@ -57,8 +61,9 @@ function setupSearchAndFilter() {
     function filterProducts() {
         let visibleCount = 0;
         
-        productCards.forEach(card => {
-            const productName = card.getAttribute('data-name').toLowerCase();
+        const currentCards = document.querySelectorAll('#perfumesGrid .product-card');
+        currentCards.forEach(card => {
+            const productName = (card.getAttribute('data-name') || '').toLowerCase();
             const productType = card.getAttribute('data-type');
             
             const matchesSearch = currentSearch === '' || productName.includes(currentSearch);
@@ -132,41 +137,53 @@ function setupShoppingCart() {
     const cartTotalElement = document.getElementById('cartTotal');
     const cartCountElement = document.getElementById('cartCount');
     
-    const addToCartButtons = document.querySelectorAll('.add-to-cart');
-    addToCartButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            const productCard = button.closest('.product-card');
-            const productName = productCard.querySelector('h3').textContent;
-            const productPrice = parseFloat(productCard.querySelector('.price').textContent.replace('₹', '').replace(',', ''));
-            const productDescription = productCard.querySelector('p').textContent;
-
-            addToCart(productName, productPrice, productDescription);
-            
-            button.classList.add('success-animation');
-            setTimeout(() => {
-                button.classList.remove('success-animation');
-            }, 600);
-        });
-    });
+    // Load cart from localStorage on initialization
+    loadCartFromStorage();
     
-    function addToCart(name, price, description) {
-        const existingItem = cart.find(item => item.name === name);
+    // Event delegation for dynamically added buttons
+    document.addEventListener('click', function(e) {
+        const target = e.target;
+        if (target && target.classList && target.classList.contains('add-to-cart')) {
+            const productCard = target.closest('.product-card');
+            if (!productCard) return;
+            const productName = productCard.querySelector('h3').textContent;
+            const productPrice = parseFloat(productCard.querySelector('.price').textContent.replace('₹', '').replace(/,/g, ''));
+            const productDescription = productCard.querySelector('p').textContent;
+            const productId = productCard.getAttribute('data-id') || null;
+            const productImageEl = productCard.querySelector('img');
+            const productImage = productImageEl ? productImageEl.getAttribute('src') : null;
+
+            addToCart({ id: productId, name: productName, price: productPrice, description: productDescription, image: productImage });
+            
+            target.classList.add('success-animation');
+            setTimeout(() => {
+                target.classList.remove('success-animation');
+            }, 600);
+        }
+    });
+     
+    function addToCart(item) {
+        const key = item.id || item.name;
+        const existingItem = cart.find(ci => (ci.id || ci.name) === key);
         
         if (existingItem) {
             existingItem.quantity += 1;
         } else {
             cart.push({
-                name: name,
-                price: price,
-                description: description,
+                id: item.id || null,
+                name: item.name,
+                price: item.price,
+                description: item.description,
+                image: item.image || null,
                 quantity: 1
             });
         }
         updateCartDisplay();
+        saveCartToStorage();
         
-        showNotification(`${name} added to cart!`);
+        showNotification(`${item.name} added to cart!`);
     }
-    
+     
     function updateCartDisplay() {
         cartItems.innerHTML = '';
         cartTotal = 0;
@@ -181,9 +198,14 @@ function setupShoppingCart() {
                 <div class="cart-item-info">
                     <h4>${item.name}</h4>
                     <p>${item.description}</p>
-                    <p>Quantity: ${item.quantity} | ₹${(item.price * item.quantity).toLocaleString('en-IN')}</p>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                        <button onclick="updateQuantity('${(item.id || item.name).toString().replace(/'/g, "\'")}', -1)" style="background: #d4af37; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">-</button>
+                        <span>Qty: ${item.quantity}</span>
+                        <button onclick="updateQuantity('${(item.id || item.name).toString().replace(/'/g, "\'")}', 1)" style="background: #d4af37; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer;">+</button>
+                        <span style="margin-left: 10px; font-weight: bold;">₹${(item.price * item.quantity).toLocaleString('en-IN')}</span>
+                    </div>
                 </div>
-                <button onclick="removeFromCart('${item.name}')" style="background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Remove</button>
+                <button onclick="removeFromCart('${(item.id || item.name).toString().replace(/'/g, "\'")}')" style="background: #e74c3c; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Remove</button>
             `;
             cartItems.appendChild(cartItem);
         });
@@ -191,34 +213,143 @@ function setupShoppingCart() {
         cartTotalElement.textContent = cartTotal.toLocaleString('en-IN');
         cartCountElement.textContent = totalItems;
     }
-
-    window.removeFromCart = function(name) {
-        const itemIndex = cart.findIndex(item => item.name === name);
+ 
+    window.removeFromCart = function(key) {
+        const itemIndex = cart.findIndex(item => (item.id || item.name) === key);
         if (itemIndex > -1) {
-            if (cart[itemIndex].quantity > 1) {
-                cart[itemIndex].quantity -= 1;
-            } else {
+            cart.splice(itemIndex, 1);
+            updateCartDisplay();
+            saveCartToStorage();
+            showNotification(`Item removed from cart!`);
+        }
+    };
+
+    window.updateQuantity = function(key, change) {
+        const itemIndex = cart.findIndex(item => (item.id || item.name) === key);
+        if (itemIndex > -1) {
+            cart[itemIndex].quantity += change;
+            if (cart[itemIndex].quantity <= 0) {
                 cart.splice(itemIndex, 1);
             }
             updateCartDisplay();
-            showNotification(`${name} removed from cart!`);
+            saveCartToStorage();
         }
     };
-    
+
+    function saveCartToStorage() {
+        try {
+            localStorage.setItem('alma_cart', JSON.stringify(cart));
+        } catch (e) {
+            console.warn('Could not save cart to localStorage:', e);
+        }
+    }
+
+    function loadCartFromStorage() {
+        try {
+            const saved = localStorage.getItem('alma_cart');
+            if (saved) {
+                cart = JSON.parse(saved);
+                updateCartDisplay();
+            }
+        } catch (e) {
+            console.warn('Could not load cart from localStorage:', e);
+            cart = [];
+        }
+    }
+     
     window.toggleCart = function() {
         cartSidebar.classList.toggle('open');
     };
-    
+     
     const checkoutBtn = document.querySelector('.checkout-btn');
     if (checkoutBtn) {
-        checkoutBtn.addEventListener('click', function() {
+        checkoutBtn.addEventListener('click', async function() {
             if (cart.length === 0) {
                 showNotification('Your cart is empty!', 'warning');
-            } else {
-                showNotification('Thank you for your purchase!', 'success');
-                cart = [];
-                updateCartDisplay();
-                toggleCart();
+                return;
+            }
+
+            const itemsWithIds = cart
+                .filter(ci => !!ci.id)
+                .map(ci => ({ productId: ci.id, quantity: ci.quantity }));
+
+            if (itemsWithIds.length === 0) {
+                showNotification('Add items from the online catalog to checkout.', 'warning');
+                return;
+            }
+
+            try {
+                const API_BASE = localStorage.getItem('API_BASE') || `http://${window.location.hostname}:5000`;
+                
+                // Create Razorpay order
+                const resp = await fetch(`${API_BASE}/api/orders/razorpay`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ items: itemsWithIds })
+                });
+                
+                const data = await resp.json();
+                if (!resp.ok) {
+                    showNotification(data.message || 'Checkout failed', 'error');
+                    return;
+                }
+
+                // Initialize Razorpay checkout
+                const options = {
+                    key: data.key,
+                    amount: data.amount,
+                    currency: data.currency,
+                    name: 'Alma Cosmetics',
+                    description: 'Order Payment',
+                    order_id: data.razorpayOrderId,
+                    handler: async function(response) {
+                        try {
+                            // Verify payment
+                            const verifyResp = await fetch(`${API_BASE}/api/orders/razorpay/verify`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({
+                                    razorpay_order_id: response.razorpay_order_id,
+                                    razorpay_payment_id: response.razorpay_payment_id,
+                                    razorpay_signature: response.razorpay_signature,
+                                    orderId: data.orderId
+                                })
+                            });
+                            
+                            const verifyData = await verifyResp.json();
+                            if (verifyResp.ok) {
+                                showNotification('Payment successful! Order placed.', 'success');
+                                cart = [];
+                                updateCartDisplay();
+                                saveCartToStorage();
+                                toggleCart();
+                            } else {
+                                showNotification(verifyData.message || 'Payment verification failed', 'error');
+                            }
+                        } catch (err) {
+                            showNotification('Payment verification error', 'error');
+                        }
+                    },
+                    prefill: {
+                        name: 'Customer',
+                        email: 'customer@example.com',
+                        contact: '9999999999'
+                    },
+                    theme: {
+                        color: '#d4af37'
+                    }
+                };
+
+                const rzp = new Razorpay(options);
+                rzp.on('payment.failed', function(response) {
+                    showNotification('Payment failed. Please try again.', 'error');
+                });
+                rzp.open();
+                
+            } catch (err) {
+                showNotification('Checkout error occurred', 'error');
             }
         });
     }
@@ -428,7 +559,7 @@ function addToCartFromModal() {
     
     // Add to cart multiple times based on quantity
     for (let i = 0; i < quantity; i++) {
-        addToCart(currentModalProduct.name, currentModalProduct.price, currentModalProduct.description);
+        addToCart({ name: currentModalProduct.name, price: currentModalProduct.price, description: currentModalProduct.description, image: currentModalProduct.image });
     }
     
     closeProductModal();
@@ -442,7 +573,7 @@ function buyNow() {
     
     // Add to cart and proceed to checkout
     for (let i = 0; i < quantity; i++) {
-        addToCart(currentModalProduct.name, currentModalProduct.price, currentModalProduct.description);
+        addToCart({ name: currentModalProduct.name, price: currentModalProduct.price, description: currentModalProduct.description, image: currentModalProduct.image });
     }
     
     closeProductModal();
@@ -529,3 +660,375 @@ const debouncedSearch = debounce(function(searchTerm) {
     // Search logic here
     console.log('Searching for:', searchTerm);
 }, 300);
+
+// Safe welcome message (prevents runtime error if not defined)
+function showWelcomeMessage() {
+    try {
+        if (sessionStorage.getItem('welcomeShown')) return;
+        sessionStorage.setItem('welcomeShown', '1');
+        // Optional: uncomment to show a toast once per session
+        // showNotification('Welcome to Alma!', 'success');
+    } catch (_) {
+        // no-op
+    }
+}
+
+// Backend integration: load products and render into perfumes grid
+function initializeBackendProductLoading() {
+    const perfumesGrid = document.getElementById('perfumesGrid');
+    const cosmeticsGrid = document.getElementById('cosmeticsGrid');
+    if (!perfumesGrid && !cosmeticsGrid) return;
+    const primaryBase = localStorage.getItem('API_BASE') || `http://${window.location.hostname}:5000`;
+    const fallbackBase = primaryBase.includes('localhost')
+        ? primaryBase.replace('localhost', '127.0.0.1')
+        : primaryBase.replace('127.0.0.1', 'localhost');
+
+    // Show loading card
+    const addLoading = (grid) => {
+        if (!grid) return null;
+        const card = document.createElement('div');
+        card.className = 'product-card';
+        card.innerHTML = '<div class="loading-spinner" style="margin: 20px auto;"></div>';
+        grid.appendChild(card);
+        return card;
+    };
+    const loadingPerfumes = addLoading(perfumesGrid);
+    const loadingCosmetics = addLoading(cosmeticsGrid);
+
+    const loadFrom = async (base) => {
+        console.log('Loading products from:', base);
+        const resp = await fetch(`${base}/api/products`);
+        if (!resp.ok) throw new Error(`Failed ${resp.status}`);
+        return resp.json();
+    };
+
+    loadFrom(primaryBase)
+        .catch(() => loadFrom(fallbackBase))
+        .then((products) => {
+            if (!Array.isArray(products)) throw new Error('Invalid products payload');
+            console.log('Products loaded:', products.length);
+            // Clear grids
+            if (perfumesGrid) perfumesGrid.innerHTML = '';
+            if (cosmeticsGrid) cosmeticsGrid.innerHTML = '';
+            const noResultsCard = document.querySelector('.no-results-card');
+            if (noResultsCard) noResultsCard.remove();
+            // Render by category: treat brand 'Cosmetic' as cosmetics section
+            products.forEach(p => {
+                const isCosmetic = (p.brand || '').toLowerCase() === 'cosmetic';
+                const grid = isCosmetic ? cosmeticsGrid : perfumesGrid;
+                if (!grid) return;
+                const card = document.createElement('div');
+                card.className = 'product-card';
+                card.setAttribute('data-category', isCosmetic ? 'cosmetic' : 'perfume');
+                card.setAttribute('data-type', (p.brand || 'floral').toLowerCase());
+                card.setAttribute('data-name', p.name);
+                card.setAttribute('data-id', p._id);
+                const imgClass = isCosmetic ? 'cosmetic-img' : 'perfume-img';
+                card.innerHTML = `
+                    <div class="product-image">
+                        <img src="${p.image}" alt="${p.name}" class="${imgClass}">
+                    </div>
+                    <h3>${p.name}</h3>
+                    <p>${p.description}</p>
+                    <span class="price">₹${Number(p.price).toLocaleString('en-IN')}</span>
+                    <button class="add-to-cart">Add to Cart</button>
+                `;
+                grid.appendChild(card);
+            });
+        })
+        .catch((err) => {
+            console.error('Product load failed:', err);
+            if (loadingPerfumes) loadingPerfumes.remove();
+            if (loadingCosmetics) loadingCosmetics.remove();
+            showNotification('Could not load products from server', 'warning');
+        });
+}
+
+// Auth pages helpers
+function setupAuthForms() {
+    const API_BASE = localStorage.getItem('API_BASE') || 'http://localhost:5000';
+    const loginForm = document.getElementById('loginForm');
+    const registerForm = document.getElementById('registerForm');
+
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value.trim();
+            try {
+                const resp = await fetch(`${API_BASE}/api/users/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ email, password })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.message || 'Login failed');
+                localStorage.setItem('user', JSON.stringify(data));
+                showNotification('Logged in successfully', 'success');
+                updateNavbarAuthState();
+                window.location.href = 'index.html';
+            } catch (err) {
+                showNotification(err.message, 'error');
+            }
+        });
+    }
+
+    if (registerForm) {
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('regName').value.trim();
+            const email = document.getElementById('regEmail').value.trim();
+            const password = document.getElementById('regPassword').value.trim();
+            try {
+                const resp = await fetch(`${API_BASE}/api/users/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ name, email, password })
+                });
+                const data = await resp.json();
+                if (!resp.ok) throw new Error(data.message || 'Registration failed');
+                localStorage.setItem('user', JSON.stringify(data));
+                showNotification('Account created', 'success');
+                updateNavbarAuthState();
+                window.location.href = 'index.html';
+            } catch (err) {
+                showNotification(err.message, 'error');
+            }
+        });
+    }
+}
+
+// My Orders page
+async function loadMyOrders() {
+    const API_BASE = localStorage.getItem('API_BASE') || 'http://localhost:5000';
+    const grid = document.getElementById('ordersGrid');
+    if (!grid) return;
+    try {
+        const resp = await fetch(`${API_BASE}/api/orders/my`, { credentials: 'include' });
+        const orders = await resp.json();
+        if (!resp.ok) throw new Error(orders.message || 'Failed to load orders');
+        grid.innerHTML = '';
+        orders.forEach(o => {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+            card.innerHTML = `
+                <h3>Order #${o._id}</h3>
+                <p>Status: ${o.status}</p>
+                <span class="price">₹${Number(o.totalPrice).toLocaleString('en-IN')}</span>
+            `;
+            grid.appendChild(card);
+        });
+    } catch (err) {
+        showNotification(err.message, 'error');
+    }
+}
+
+// Admin page
+async function initAdminPage() {
+    const API_BASE = localStorage.getItem('API_BASE') || 'http://localhost:5000';
+    const currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+    if (!currentUser || currentUser.role !== 'admin') {
+        showNotification('Admin access only', 'error');
+        window.location.href = 'login.html';
+        return;
+    }
+
+    const productsWrap = document.getElementById('adminProducts');
+    const ordersWrap = document.getElementById('adminOrders');
+    const form = document.getElementById('productForm');
+    const resetBtn = document.getElementById('resetProductBtn');
+
+    async function loadProducts() {
+        const resp = await fetch(`${API_BASE}/api/products`);
+        const items = await resp.json();
+        productsWrap.innerHTML = '';
+        items.forEach(p => {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+            card.innerHTML = `
+                <div class="product-image"><img class="${(p.brand||'').toLowerCase()==='cosmetic'?'cosmetic-img':'perfume-img'}" src="${p.image}" alt="${p.name}"></div>
+                <h3>${p.name}</h3>
+                <p>${p.description}</p>
+                <span class="price">₹${Number(p.price).toLocaleString('en-IN')}</span>
+                <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+                    <button class="submit-btn" data-edit="${p._id}">Edit</button>
+                    <button class="submit-btn" data-del="${p._id}">Delete</button>
+                </div>
+            `;
+            productsWrap.appendChild(card);
+        });
+    }
+
+    async function loadOrders() {
+        const resp = await fetch(`${API_BASE}/api/orders`, { credentials: 'include' });
+        const items = await resp.json();
+        ordersWrap.innerHTML = '';
+        items.forEach(o => {
+            const card = document.createElement('div');
+            card.className = 'product-card';
+            card.innerHTML = `
+                <h3>Order #${o._id}</h3>
+                <p>User: ${o.user?.name || ''} (${o.user?.email || ''})</p>
+                <p>Status: ${o.status}</p>
+                <span class="price">₹${Number(o.totalPrice).toLocaleString('en-IN')}</span>
+                <div style="display:flex; gap:8px; justify-content:center; margin-top:8px;">
+                    <button class="submit-btn" data-status="processing" data-id="${o._id}">Processing</button>
+                    <button class="submit-btn" data-status="shipped" data-id="${o._id}">Shipped</button>
+                    <button class="submit-btn" data-status="delivered" data-id="${o._id}">Delivered</button>
+                </div>
+            `;
+            ordersWrap.appendChild(card);
+        });
+    }
+
+    productsWrap?.addEventListener('click', async (e) => {
+        const t = e.target;
+        const id = t.getAttribute('data-del') || t.getAttribute('data-edit');
+        if (!id) return;
+        if (t.hasAttribute('data-del')) {
+            const resp = await fetch(`${API_BASE}/api/products/${id}`, { method: 'DELETE', credentials: 'include' });
+            if (resp.ok) { showNotification('Product deleted', 'success'); loadProducts(); }
+            else showNotification('Delete failed', 'error');
+        } else if (t.hasAttribute('data-edit')) {
+            // preload form
+            const resp = await fetch(`${API_BASE}/api/products/${id}`);
+            const p = await resp.json();
+            document.getElementById('prodId').value = p._id;
+            document.getElementById('prodName').value = p.name;
+            document.getElementById('prodBrand').value = p.brand;
+            document.getElementById('prodPrice').value = p.price;
+            document.getElementById('prodStock').value = p.stock;
+            document.getElementById('prodImage').value = p.image;
+            document.getElementById('prodDesc').value = p.description;
+        }
+    });
+
+    ordersWrap?.addEventListener('click', async (e) => {
+        const t = e.target;
+        const id = t.getAttribute('data-id');
+        const status = t.getAttribute('data-status');
+        if (!id || !status) return;
+        const resp = await fetch(`${API_BASE}/api/orders/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ status })
+        });
+        if (resp.ok) { showNotification('Order updated', 'success'); loadOrders(); }
+        else showNotification('Update failed', 'error');
+    });
+
+    form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            name: document.getElementById('prodName').value.trim(),
+            brand: document.getElementById('prodBrand').value.trim(),
+            price: Number(document.getElementById('prodPrice').value),
+            stock: Number(document.getElementById('prodStock').value),
+            image: document.getElementById('prodImage').value.trim(),
+            description: document.getElementById('prodDesc').value.trim(),
+        };
+        const id = document.getElementById('prodId').value;
+        const method = id ? 'PUT' : 'POST';
+        const url = id ? `${API_BASE}/api/products/${id}` : `${API_BASE}/api/products`;
+        const resp = await fetch(url, {
+            method,
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        });
+        if (resp.ok) {
+            showNotification('Product saved', 'success');
+            form.reset();
+            document.getElementById('prodId').value = '';
+            loadProducts();
+        } else {
+            showNotification('Save failed', 'error');
+        }
+    });
+
+    resetBtn?.addEventListener('click', () => {
+        form.reset();
+        document.getElementById('prodId').value = '';
+    });
+
+    await Promise.all([loadProducts(), loadOrders()]);
+}
+
+// Auth state management
+function setupAuthState() {
+    updateNavbarAuthState();
+}
+
+function updateNavbarAuthState() {
+    const navMenu = document.querySelector('.nav-menu');
+    if (!navMenu) return;
+
+    const user = JSON.parse(localStorage.getItem('user') || 'null');
+    
+    // Remove existing auth links
+    const existingAuthLinks = navMenu.querySelectorAll('.auth-link');
+    existingAuthLinks.forEach(link => link.remove());
+
+    if (user) {
+        // User is logged in
+        const myOrdersLink = createNavLink('My Orders', 'myorders.html');
+        myOrdersLink.classList.add('auth-link');
+        navMenu.appendChild(myOrdersLink);
+
+        if (user.role === 'admin') {
+            const adminLink = createNavLink('Admin', 'admin.html');
+            adminLink.classList.add('auth-link');
+            navMenu.appendChild(adminLink);
+        }
+
+        const logoutLink = createNavLink('Logout', '#');
+        logoutLink.classList.add('auth-link');
+        logoutLink.addEventListener('click', handleLogout);
+        navMenu.appendChild(logoutLink);
+    } else {
+        // User is not logged in
+        const loginLink = createNavLink('Login', 'login.html');
+        loginLink.classList.add('auth-link');
+        navMenu.appendChild(loginLink);
+
+        const registerLink = createNavLink('Register', 'register.html');
+        registerLink.classList.add('auth-link');
+        navMenu.appendChild(registerLink);
+    }
+}
+
+function createNavLink(text, href) {
+    const li = document.createElement('li');
+    li.className = 'nav-item';
+    const a = document.createElement('a');
+    a.href = href;
+    a.className = 'nav-link';
+    a.textContent = text;
+    li.appendChild(a);
+    return li;
+}
+
+async function handleLogout(e) {
+    e.preventDefault();
+    try {
+        const API_BASE = localStorage.getItem('API_BASE') || `http://${window.location.hostname}:5000`;
+        await fetch(`${API_BASE}/api/users/logout`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+        
+        localStorage.removeItem('user');
+        updateNavbarAuthState();
+        showNotification('Logged out successfully', 'success');
+        
+        // Redirect to home if on protected pages
+        if (window.location.pathname.includes('admin.html') || window.location.pathname.includes('myorders.html')) {
+            window.location.href = 'index.html';
+        }
+    } catch (err) {
+        showNotification('Logout error', 'error');
+    }
+}
